@@ -58,8 +58,6 @@ def load_records(phrase, start=1):
             'maximumRecords': 10,
             'recordPacking': 'xml'}))
     bf_graph = process_voyager_xml(voyager_url)
-    #bf_graph.parse(data=rdf_xml, format='xml')
-    
 
 def load_reporting_samples():
     """Function loads Library of Congress sample sets using "Mark Twain"
