@@ -2,12 +2,16 @@
 This module ingests XML exported from the Library of Congress, converts to 
 BIBFRAME entities and stores into a running BIBFRAME Datastore.
 
+To use the ingester with the sample LOC queries, run the following command:
+
+    $ python ingester.py load
 
 """
 __author__ = "Jeremy Nelson"
 __license__ = "GPLv3"
 
 import argparse
+import logging
 import os
 import rdflib
 import requests
@@ -24,6 +28,10 @@ sys.path.append(os.path.join(CURRENT_DIR, "lib/bibframe-datastore"))
 import semantic_server.repository.utilities.bibframe as bibframe
 from semantic_server.repository.resources.fedora import Resource
 from semantic_server.repository.utilities.namespaces import *
+
+logging.basicConfig(filename='error.log',
+                    format='%(asctime)s %(funcName)s %(message)s',
+                    level=logging.ERROR)
 
 # SPARQL Statements
 INSTANCE_SPARQL = """PREFIX rdf: <{}>
@@ -45,6 +53,7 @@ CONFIG = {'FUSEKI': {'port': 3030,
 }
 
 etree.register_namespace("", "http://www.loc.gov/MARC21/slim")
+etree.register_namespace("zs", "http://www.loc.gov/zing/srw/")
 
 LOC_Z3950_URL = 'http://z3950.loc.gov:7090/'
 LOC_MEDIA_URL = 'http://lcweb2.loc.gov/diglib/media/loc.natlib.lcdb.{}/001.tif/{}'
@@ -59,18 +68,20 @@ def add_cover_art(record, bf_graph):
     """
     field001 = record.find(
         "{http://www.loc.gov/MARC21/slim}controlfield[@tag='001']")
-    if not field001:
-        with open("E:\\2015\\loc-bibcat-reporting-dataset\\bad-rec.xml", "w+") as xml_file:
-            xml_file.write(etree.tostring(record).decode())
-        raise ValueError()
-    else: 
-        print("FOUND field001\n", etree.tostring(record).decode())
-        
+    #control_fields= record.findall(
+    #    "{http://www.loc.gov/MARC21/slim}controlfield")
+    #if len(control_fields) < 1:
+    #    control_fields= record.findall(
+    #        "controlfield")
+  
+    #for field in control_fields:
+    #    if field.get('tag') == '001':
+    #        field001 = field
+    #        break
     media_url = LOC_MEDIA_URL.format(field001.text, 100)
     result = requests.get(media_url)
     if result.status_code < 400:
         searcher = bibframe.BIBFRAMESearch(config=CONFIG)
-        print("Found {}, bf_graph={}".format(media_url, bf_graph))
         cover_art_graph = bibframe.default_graph()
         cover_art_subject = rdflib.BNode()
         instance_query = bf_graph.query(INSTANCE_SPARQL)    
@@ -86,10 +97,24 @@ def add_cover_art(record, bf_graph):
                              rdflib.URIRef(media_url)))
         cover_art = Resource(CONFIG, bibframe.BIBFRAMESearch(config=CONFIG))
         cover_art_url = cover_art.__create__(
-            rdf=cover_art_graph, 
+            rdf=cover_art_graph,
+            index='bibframe',
+            doc_type='CoverArt', 
             binary=result.content, 
             mimetype='image/jpeg')
         return cover_art_url
+
+def build_voyager_url(phrase, start=1, max_recs=10):
+    return urllib.parse.urljoin(
+        LOC_Z3950_URL,
+        'voyager?' + urllib.parse.urlencode(
+            {'operation': 'searchRetrieve',
+            'version': '1.1',
+            'query': '"{}"'.format(phrase),
+            'recordSchema': 'opacxml',
+            'startRecord': start,
+            'maximumRecords': max_recs,
+            'recordPacking': 'xml'}))
 
 def load_records(phrase, start=1):
     """Function takes a phrase, queries LOC's Voyager z3950 endpoint,
@@ -99,18 +124,13 @@ def load_records(phrase, start=1):
     Args:
         phrase -- String to query z3950
     """
-    voyager_url = urllib.parse.urljoin(
-        LOC_Z3950_URL,
-        'voyager?' + urllib.parse.urlencode(
-            {'operation': 'searchRetrieve',
-            'version': '1.1',
-            'query': '"{}"'.format(phrase),
-            'recordSchema': 'opacxml',
-            'startRecord': start,
-            'maximumRecords': 10,
-            'recordPacking': 'xml'}))
-    bf_graph = process_voyager_xml(voyager_url)
-    return bf_graph
+    try:
+        voyager_url = build_voyager_url(phrase, start)    
+        bf_graph = process_voyager_xml(voyager_url)
+        return bf_graph
+    except:
+        logging.error("{} start={}".format(phrase, start))
+    
 
 def load_reporting_samples():
     """Function loads Library of Congress sample sets using "Mark Twain"
@@ -118,19 +138,61 @@ def load_reporting_samples():
     mark_twain = "Mark Twain"
     bible = "Bible"
     start = datetime.utcnow()
-    print("Starting loading {} and {} phrases at {}".format(
+    print("Loading {} and {} phrases at {}".format(
         mark_twain, 
         bible, 
         start.isoformat()))
-    load_records(mark_twain)
-    load_records(mark_twain, 11)
-    load_records(bible)
-    load_records(bible, 11)
+    load_records(mark_twain, 1)
+
+    #load_sample(mark_twain)
+    #load_sample(bible)
+    #load_records(bible, 11)
     end = datetime.utcnow()
     print(
         "Finished loading reporting module samples at {}, total time {}".format(
             end,
             (end-start).seconds / 60.0))
+
+def load_sample(phrase):
+    """Function loads an entire query set in 10 record increments 
+
+    Args:
+        phrase -- Phrase to search one
+    """
+    start, end = 1, None
+    # Run query and retrieve a single XML record to get total number of records
+    result = requests.get(build_voyager_url(phrase, 1, 1))
+    if result.status_code > 399:
+        raise ValueError(
+            "Load sample for {} failed trying to retrieve {} code={}".format(
+                phrase,
+                build_voyager_url(phrase, 1, 1),
+                result.status_code))
+    z3950_xml = etree.XML(result.content)
+    numberOfRecords = z3950_xml.find("{http://www.loc.gov/zing/srw/}numberOfRecords")
+    num_recs = int(numberOfRecords.text)
+    shards = int(num_recs / 10)
+    start = datetime.utcnow()
+    print("Loading sample {} at {} total shards={}".format(phrase, 
+                                                           start.isoformat(), 
+                                                           shards))
+    for i,shard in enumerate(range(1, shards+1)):
+        load_records(phrase, shard)
+        print(".", end="")
+        if not i%10 and i > 0:
+            print(i, end="")
+    end = datetime.utcnow()
+    print("""Finished loading sample for term "{}" at {}, 
+total recs={} time elapsed={} minutes""".format(
+        phrase, 
+        end.isoformat(), 
+        i, 
+        (end-start).seconds/60.0))
+        
+    
+    
+    
+    
 
 def process_holding(element, bf_graph):
     """Function takes a Holding Element and returns the BIBFRAME HeldItem
@@ -179,7 +241,7 @@ def process_holding(element, bf_graph):
              BF.subLocation,
              rdflib.Literal(local_location.text)))         
     held_item = Resource(CONFIG, bibframe.BIBFRAMESearch(config=CONFIG))
-    held_item.__create__(rdf=rdf_graph)
+    held_item.__create__(rdf=rdf_graph, index='bibframe')
     return held_item
 
 def process_record(element, quiet=True):
@@ -192,7 +254,7 @@ def process_record(element, quiet=True):
     raw_xml = etree.tostring(element).decode().replace("\n", "").encode()
     bf_graph = xquery_socket(raw_xml)
     ingester = bibframe.Ingester(config=CONFIG, graph=bf_graph)
-    ingester.ingest(False)
+    ingester.ingest(quiet)
     add_cover_art(element, bf_graph)
     return bf_graph
 
@@ -210,7 +272,7 @@ def process_voyager_xml(url):
         tag = str(element.tag)
         if tag.endswith('holding'):
             process_holding(element, bf_graph)
-        if tag.endswith('record'):
+        if tag.startswith('{http://www.loc.gov/MARC21/slim}record'):
             bf_graph = process_record(element)
         
 def xquery_socket(raw_xml):
