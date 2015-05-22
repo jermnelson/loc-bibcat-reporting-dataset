@@ -11,6 +11,7 @@ __author__ = "Jeremy Nelson"
 __license__ = "GPLv3"
 
 import argparse
+import datetime
 import logging
 import os
 import rdflib
@@ -24,7 +25,7 @@ from datetime import datetime
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 BASE_DIR = os.path.dirname(CURRENT_DIR)
-sys.path.append(os.path.join(CURRENT_DIR, "lib/bibframe-datastore"))
+sys.path.append(os.path.join(CURRENT_DIR, "lib/bibframe-datastore/src"))
 import semantic_server.repository.utilities.bibframe as bibframe
 from semantic_server.repository.resources.fedora import Resource
 from semantic_server.repository.utilities.namespaces import *
@@ -32,6 +33,11 @@ from semantic_server.repository.utilities.namespaces import *
 logging.basicConfig(filename='error.log',
                     format='%(asctime)s %(funcName)s %(message)s',
                     level=logging.ERROR)
+logging.basicConfig(filename='info.log',
+                    format='%(asctime)s %(funcName)s %(message)s',
+                    level=logging.INFO)
+
+
 
 # SPARQL Statements
 INSTANCE_SPARQL = """PREFIX rdf: <{}>
@@ -102,6 +108,8 @@ def add_cover_art(record, bf_graph):
             doc_type='CoverArt', 
             binary=result.content, 
             mimetype='image/jpeg')
+        logging.info("Cover art found media_url={} cover art url={}".format(
+            media_url, cover_art_url))
         return cover_art_url
 
 def build_voyager_url(phrase, start=1, max_recs=10):
@@ -142,9 +150,9 @@ def load_reporting_samples():
         mark_twain, 
         bible, 
         start.isoformat()))
-    load_records(mark_twain, 1)
+    #load_records(mark_twain, 3)
 
-    #load_sample(mark_twain)
+    load_sample(mark_twain)
     #load_sample(bible)
     #load_records(bible, 11)
     end = datetime.utcnow()
@@ -161,13 +169,14 @@ def load_sample(phrase):
     """
     start, end = 1, None
     # Run query and retrieve a single XML record to get total number of records
-    result = requests.get(build_voyager_url(phrase, 1, 1))
+    result = requests.get(build_voyager_url(phrase, 1))
     if result.status_code > 399:
-        raise ValueError(
-            "Load sample for {} failed trying to retrieve {} code={}".format(
-                phrase,
-                build_voyager_url(phrase, 1, 1),
-                result.status_code))
+        message = "Load sample for {} failed trying to retrieve {} code={}".format(
+            phrase,
+            build_voyager_url(phrase, 1, 1),
+            result.status_code)
+        logging.error(message)
+        raise ValueError(message)
     z3950_xml = etree.XML(result.content)
     numberOfRecords = z3950_xml.find("{http://www.loc.gov/zing/srw/}numberOfRecords")
     num_recs = int(numberOfRecords.text)
@@ -239,7 +248,7 @@ def process_holding(element, bf_graph):
         rdf_graph.add(
             (holding_uri,
              BF.subLocation,
-             rdflib.Literal(local_location.text)))         
+             rdflib.Literal(local_location.text)))
     held_item = Resource(CONFIG, bibframe.BIBFRAMESearch(config=CONFIG))
     held_item.__create__(rdf=rdf_graph, index='bibframe')
     return held_item
