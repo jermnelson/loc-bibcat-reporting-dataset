@@ -49,13 +49,16 @@ WHERE {{
 
 
 # Local config
-CONFIG = {'FUSEKI': {'port': 3030, 
+CONFIG = {'FUSEKI': {'port': 8081, 
                      'host': 'localhost', 
-                     'datastore': 'bf'}, 
-          'FEDORA': {'port': 8080, 
-                     'host': 'localhost'}, 
-          'ELASTICSEARCH': {'port': 9200, 
-                            'host': 'localhost'}
+                     'datastore': 'bf',
+                     'url_prefix': 'fuseki'}, 
+          'FEDORA': {'port': 8081, 
+                     'host': 'localhost',
+                     'url_prefix': 'fedora'}, 
+          'ELASTICSEARCH': {'port': 8081, 
+                            'host': 'localhost',
+                            'url_prefix': 'elasticsearch'}
 }
 
 etree.register_namespace("", "http://www.loc.gov/MARC21/slim")
@@ -150,9 +153,9 @@ def load_reporting_samples():
         mark_twain, 
         bible, 
         start.isoformat()))
-    #load_records(mark_twain, 3)
+    load_records(mark_twain)
 
-    load_sample(mark_twain)
+    #load_sample(mark_twain)
     #load_sample(bible)
     #load_records(bible, 11)
     end = datetime.utcnow()
