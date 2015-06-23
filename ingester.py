@@ -25,7 +25,7 @@ from datetime import datetime
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 BASE_DIR = os.path.dirname(CURRENT_DIR)
-sys.path.append(os.path.join(CURRENT_DIR, "lib/bibframe-datastore/src"))
+sys.path.append(os.path.join(CURRENT_DIR, "lib/bibframe_datastore/src"))
 import semantic_server.repository.utilities.bibframe as bibframe
 from semantic_server.repository.resources.fedora import Resource
 from semantic_server.repository.utilities.namespaces import *
@@ -310,7 +310,11 @@ def xquery_socket(raw_xml):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Library of Congress Sample Ingester')
-    parser.add_argument('load', help='Load BIBCAT Reporting Samples')
+    parser.add_argument('load', nargs="+", help='Load BIBCAT Reporting Samples')
     args = parser.parse_args()
     if args.load:
-        load_reporting_samples()
+        if args.load[-1].lower().startswith("sample"):
+            load_reporting_samples()
+        else:
+            for term in args.load[1:]:
+                load_sample(term)
