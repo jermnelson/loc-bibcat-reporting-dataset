@@ -11,6 +11,7 @@ __author__ = "Jeremy Nelson"
 __license__ = "GPLv3"
 
 import argparse
+import configparser
 import datetime
 import logging
 import os
@@ -49,17 +50,12 @@ WHERE {{
 
 
 # Local config
-CONFIG = {'FUSEKI': {'port': 8081, 
-                     'host': 'localhost', 
-                     'datastore': 'bf',
-                     'url_prefix': 'fuseki'}, 
-          'FEDORA': {'port': 8081, 
-                     'host': 'localhost',
-                     'url_prefix': 'fedora'}, 
-          'ELASTICSEARCH': {'port': 8081, 
-                            'host': 'localhost',
-                            'url_prefix': 'elasticsearch'}
-}
+CONFIG = configparser.ConfigParser()
+CONFIG['DEFAULT'] = {"host": "localhost"}
+CONFIG['TOMCAT'] = { 'port': 8080}
+CONFIG['BLAZEGRAPH'] = {'path': 'bigdata'} 
+CONFIG['FEDORA'] = {'path': 'fedora'}
+CONFIG['ELASTICSEARCH'] = {'path': 'elasticsearch'}
 
 etree.register_namespace("", "http://www.loc.gov/MARC21/slim")
 etree.register_namespace("zs", "http://www.loc.gov/zing/srw/")
@@ -153,10 +149,10 @@ def load_reporting_samples():
         mark_twain, 
         bible, 
         start.isoformat()))
-    load_records(mark_twain)
+    #load_records(mark_twain)
 
-    #load_sample(mark_twain)
-    #load_sample(bible)
+    load_sample(mark_twain)
+    load_sample(bible)
     #load_records(bible, 11)
     end = datetime.utcnow()
     print(
