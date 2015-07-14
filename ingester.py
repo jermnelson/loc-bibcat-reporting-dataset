@@ -13,6 +13,7 @@ __license__ = "GPLv3"
 import argparse
 import configparser
 import datetime
+import importlib
 import logging
 import os
 import rdflib
@@ -26,7 +27,7 @@ from datetime import datetime
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 BASE_DIR = os.path.dirname(CURRENT_DIR)
-sys.path.append(os.path.join(CURRENT_DIR, "lib/bibframe_datastore/src"))
+sys.path.append(os.path.join(CURRENT_DIR, "lib/bibframe-datastore/src"))
 import semantic_server.repository.utilities.bibframe as bibframe
 from semantic_server.repository.resources.fedora import Resource
 from semantic_server.repository.utilities.namespaces import *
@@ -55,7 +56,7 @@ CONFIG['DEFAULT'] = {"host": "localhost"}
 CONFIG['TOMCAT'] = { 'port': 8080}
 CONFIG['BLAZEGRAPH'] = {'path': 'bigdata'} 
 CONFIG['FEDORA'] = {'path': 'fedora'}
-CONFIG['ELASTICSEARCH'] = {'path': 'elasticsearch'}
+CONFIG['ELASTICSEARCH'] = {'port': 9200}
 
 etree.register_namespace("", "http://www.loc.gov/MARC21/slim")
 etree.register_namespace("zs", "http://www.loc.gov/zing/srw/")
