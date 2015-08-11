@@ -29,6 +29,7 @@ CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 BASE_DIR = os.path.dirname(CURRENT_DIR)
 sys.path.append(os.path.join(CURRENT_DIR, "lib/bibframe-datastore/src"))
 import semantic_server.repository.utilities.bibframe as bibframe
+from semantic_server.repository import CONTEXT
 from semantic_server.repository.resources.fedora import Resource
 from semantic_server.repository.utilities.namespaces import *
 
@@ -178,6 +179,7 @@ def load_sample(phrase):
         logging.error(message)
         raise ValueError(message)
     z3950_xml = etree.XML(result.content)
+    
     numberOfRecords = z3950_xml.find("{http://www.loc.gov/zing/srw/}numberOfRecords")
     num_recs = int(numberOfRecords.text)
     shards = int(num_recs / 10)
