@@ -255,7 +255,30 @@ def process_holding(element, bf_graph):
     held_item.__create__(rdf=rdf_graph, index='bibframe')
     return held_item
 
-def process_record(element, quiet=True):
+LUA_HASHES = {"add_get_triplestore": "a019e2fd226a6239c17f5e32f63611a13193d9a5"}
+import json, redis
+redis_cache = redis.StrictRedis()
+
+def process_record(element):
+    raw_xml = etree.tostring(element).decode().replace("\n", "").encode()
+    bf_graph = xquery_socket(raw_xml)
+    transaction = redis_cache.pipeline(transaction=True)
+    for s,p,o in bf_graph:
+        subject_graph = bibframe.default_graph()
+        subject_graph.add((s,p,o))
+        subject_json_ld = json.dumps(
+            json.loads(subject_graph.serialize(format='json-ld').decode()))
+        subject_key = redis_cache.evalsha(
+           LUA_HASHES.get('add_get_triplestore'),
+           3,
+           str(s),
+           str(p),
+           str(o))
+        transaction.set(subject_key, subject_json_ld)
+    transaction.execute()
+    return bf_graph
+    
+def process_record_ingest(element, quiet=True):
     """Function takes a Holding Element and returns the BIBFRAME HeldItem
     RDF graph
 
@@ -282,7 +305,8 @@ def process_voyager_xml(url):
     for action, element in context:
         tag = str(element.tag)
         if tag.endswith('holding'):
-            process_holding(element, bf_graph)
+            #process_holding(element, bf_graph)
+            continue
         if tag.startswith('{http://www.loc.gov/MARC21/slim}record'):
             bf_graph = process_record(element)
         
